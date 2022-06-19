@@ -695,6 +695,47 @@ Last login: Sun Jun 19 16:31:47 2022 from 10.0.2.2
 /dev/md0p5 on /raid/part5 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
 [vagrant@otuslinux ~]$</pre>
 
+<pre>[vagrant@otuslinux ~]$ lsblk
+NAME      MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINT
+sda         8:0    0   40G  0 disk  
+`-sda1      8:1    0   40G  0 part  /
+sdb         8:16   0  250M  0 disk  
+`-md0       9:0    0  992M  0 raid5 
+  |-md0p1 259:4    0  196M  0 md    /raid/part1
+  |-md0p2 259:5    0  198M  0 md    /raid/part2
+  |-md0p3 259:6    0  200M  0 md    /raid/part3
+  |-md0p4 259:7    0  198M  0 md    /raid/part4
+  `-md0p5 259:0    0  196M  0 md    /raid/part5
+sdc         8:32   0  250M  0 disk  
+`-md0       9:0    0  992M  0 raid5 
+  |-md0p1 259:4    0  196M  0 md    /raid/part1
+  |-md0p2 259:5    0  198M  0 md    /raid/part2
+  |-md0p3 259:6    0  200M  0 md    /raid/part3
+  |-md0p4 259:7    0  198M  0 md    /raid/part4
+  `-md0p5 259:0    0  196M  0 md    /raid/part5
+sdd         8:48   0  250M  0 disk  
+`-md0       9:0    0  992M  0 raid5 
+  |-md0p1 259:4    0  196M  0 md    /raid/part1
+  |-md0p2 259:5    0  198M  0 md    /raid/part2
+  |-md0p3 259:6    0  200M  0 md    /raid/part3
+  |-md0p4 259:7    0  198M  0 md    /raid/part4
+  `-md0p5 259:0    0  196M  0 md    /raid/part5
+sde         8:64   0  250M  0 disk  
+`-md0       9:0    0  992M  0 raid5 
+  |-md0p1 259:4    0  196M  0 md    /raid/part1
+  |-md0p2 259:5    0  198M  0 md    /raid/part2
+  |-md0p3 259:6    0  200M  0 md    /raid/part3
+  |-md0p4 259:7    0  198M  0 md    /raid/part4
+  `-md0p5 259:0    0  196M  0 md    /raid/part5
+sdf         8:80   0  250M  0 disk  
+`-md0       9:0    0  992M  0 raid5 
+  |-md0p1 259:4    0  196M  0 md    /raid/part1
+  |-md0p2 259:5    0  198M  0 md    /raid/part2
+  |-md0p3 259:6    0  200M  0 md    /raid/part3
+  |-md0p4 259:7    0  198M  0 md    /raid/part4
+  `-md0p5 259:0    0  196M  0 md    /raid/part5
+[vagrant@otuslinux ~]$</pre>
+
 <p>Как видим, после загрузки партиции примонтировались успешно.</p>
 
 <h4># Доп. задание - Vagrantfile, который сразу собирает систему с подключенным рейдом и смонтированными разделами. После перезагрузки стенда разделы должны автоматически примонтироваться</h4>
