@@ -699,4 +699,4 @@ Last login: Sun Jun 19 16:31:47 2022 from 10.0.2.2
 
 <h4># Доп. задание - Vagrantfile, который сразу собирает систему с подключенным рейдом и смонтированными разделами. После перезагрузки стенда разделы должны автоматически примонтироваться</h4>
 
-<p><a href+"https://github.com/SergSha/disksystem/blob/ab80acb66308f48867703b1aba8c6a77a9589dc4/Vagrantfile">Vagrantfile</a></p>
+<p><a href="https://github.com/SergSha/disksystem/blob/ab80acb66308f48867703b1aba8c6a77a9589dc4/Vagrantfile">Vagrantfile</a></p>
