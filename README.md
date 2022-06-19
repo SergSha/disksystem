@@ -309,13 +309,19 @@ DEVICE partitions
 ARRAY /dev/md0 level=raid5 num-devices=5 metadata=1.2 name=otuslinux:0 UUID=6695ff37:328cd15c:534aaa7f:b684dd54
 [root@otuslinux ~]#</pre>
 
+<p>Перезагрузим систему:</p>
+
 <pre>[root@otuslinux ~]# shutdown -r now
 Connection to 127.0.0.1 closed by remote host.
 Connection to 127.0.0.1 closed.</pre>
 
+<p>Заходим в систему:</p>
+
 <pre>[user@localhost disksystem]$ vagrant ssh
 Last login: Sun Jun 19 15:38:04 2022 from 10.0.2.2
 [vagrant@otuslinux ~]$</pre>
+
+<p>Проверяем, загрузился ли RAID:</p>
 
 <pre>[vagrant@otuslinux ~]$ sudo mdadm -D /dev/md0 
 /dev/md0:
@@ -352,8 +358,288 @@ Consistency Policy : resync
        4       8       80        4      active sync   /dev/sdf
 [vagrant@otuslinux ~]$</pre>
 
-
+<p>Как видим, RAID загрузился и работает.</p>
 
 <h4># Сломать/починить RAID</h4>
 
+<p>Сделаем это можно искусственно “сломав” одно из блочных устройств опцией --fail, но предварительно зайдём под правами root:</p>
 
+<pre>[vagrant@otuslinux ~]$ sudo -i
+[root@otuslinux ~]#</pre>
+
+<pre>[root@otuslinux ~]# mdadm /dev/md0 --fail /dev/sdc
+mdadm: set /dev/sdc faulty in /dev/md0
+[root@otuslinux ~]#</pre>
+
+<p>Смотрим как это отразилось на RAID:</p>
+
+<pre>[root@otuslinux ~]# cat /proc/mdstat 
+Personalities : [raid6] [raid5] [raid4] 
+md0 : active raid5 sdf[4] sde[3] sdb[0] sdd[2] sdc[1](F)
+      1015808 blocks super 1.2 level 5, 512k chunk, algorithm 2 [5/4] [U_UUU]
+      
+unused devices: <none>
+[root@otuslinux ~]#</pre>
+
+<p>Из этого [U_UUU], видим, что отсутствует второй юнит.</p>
+
+<pre>[root@otuslinux ~]# mdadm -D /dev/md0
+/dev/md0:
+           Version : 1.2
+     Creation Time : Sun Jun 19 15:56:48 2022
+        Raid Level : raid5
+        Array Size : 1015808 (992.00 MiB 1040.19 MB)
+     Used Dev Size : 253952 (248.00 MiB 260.05 MB)
+      Raid Devices : 5
+     Total Devices : 5
+       Persistence : Superblock is persistent
+
+       Update Time : Sun Jun 19 17:21:10 2022
+             State : clean, degraded 
+    Active Devices : 4
+   Working Devices : 4
+    Failed Devices : 1
+     Spare Devices : 0
+
+            Layout : left-symmetric
+        Chunk Size : 512K
+
+Consistency Policy : resync
+
+              Name : otuslinux:0  (local to host otuslinux)
+              UUID : 6695ff37:328cd15c:534aaa7f:b684dd54
+            Events : 19
+
+    Number   Major   Minor   RaidDevice State
+       0       8       16        0      active sync   /dev/sdb
+       -       0        0        1      removed
+       2       8       48        2      active sync   /dev/sdd
+       3       8       64        3      active sync   /dev/sde
+       4       8       80        4      active sync   /dev/sdf
+
+       1       8       32        -      faulty   /dev/sdc
+[root@otuslinux ~]#</pre>
+
+<p>Из этого тоже видно, что диск sdc в массиве RAID не работает.</p>
+
+<p>Удалим этот "сломанный" диск из массива RAID, имитируя "горячее" отключение:</p>
+
+<pre>[root@otuslinux ~]# mdadm /dev/md0 --remove /dev/sdc
+mdadm: hot removed /dev/sdc from /dev/md0
+[root@otuslinux ~]#</pre>
+
+<p>Теперь имитируем вставку нового диска и добавим его в RAID:</p>
+
+<pre>[root@otuslinux ~]# mdadm /dev/md0 --add /dev/sdc
+mdadm: added /dev/sdc
+[root@otuslinux ~]#</pre>
+
+<p>Диск должен пройти стадию rebuilding. Процесс rebuilding можно увидеть с помощью следующих команд:</p>
+
+<pre>[root@otuslinux ~]# cat /proc/mdstat 
+Personalities : [raid6] [raid5] [raid4] 
+md0 : active raid5 sdc[5] sdf[4] sde[3] sdb[0] sdd[2]
+      1015808 blocks super 1.2 level 5, 512k chunk, algorithm 2 [5/5] [UUUUU]
+      
+unused devices: <none>
+[root@otuslinux ~]#</pre>
+
+<pre>[root@otuslinux ~]# mdadm -D /dev/md0
+/dev/md0:
+           Version : 1.2
+     Creation Time : Sun Jun 19 15:56:48 2022
+        Raid Level : raid5
+        Array Size : 1015808 (992.00 MiB 1040.19 MB)
+     Used Dev Size : 253952 (248.00 MiB 260.05 MB)
+      Raid Devices : 5
+     Total Devices : 5
+       Persistence : Superblock is persistent
+
+       Update Time : Sun Jun 19 17:44:34 2022
+             State : clean 
+    Active Devices : 5
+   Working Devices : 5
+    Failed Devices : 0
+     Spare Devices : 0
+
+            Layout : left-symmetric
+        Chunk Size : 512K
+
+Consistency Policy : resync
+
+              Name : otuslinux:0  (local to host otuslinux)
+              UUID : 6695ff37:328cd15c:534aaa7f:b684dd54
+            Events : 61
+
+    Number   Major   Minor   RaidDevice State
+       0       8       16        0      active sync   /dev/sdb
+       5       8       32        1      active sync   /dev/sdc
+       2       8       48        2      active sync   /dev/sdd
+       3       8       64        3      active sync   /dev/sde
+       4       8       80        4      active sync   /dev/sdf
+[root@otuslinux ~]#</pre>
+
+<p>Из-за очень маленького объёма занятого прострарства процесс перестроения RAID происходит практиччески мгновенно.</p>
+
+<h4># Создать GPT раздел, пять партиций и смонтировать их на диск</h4>
+
+<p>Создаем раздел GPT на созданном RAID:</p>
+
+<pre>[root@otuslinux ~]# parted -s /dev/md0 mklabel gpt
+[root@otuslinux ~]#</pre>
+
+<p>Создаём партиции:</p>
+
+<pre>[root@otuslinux ~]# parted /dev/md0 mkpart primary ext4 0% 20%
+Information: You may need to update /etc/fstab.
+
+[root@otuslinux ~]# parted /dev/md0 mkpart primary ext4 20% 40%           
+Information: You may need to update /etc/fstab.
+
+[root@otuslinux ~]# parted /dev/md0 mkpart primary ext4 40% 60%          
+Information: You may need to update /etc/fstab.
+
+[root@otuslinux ~]# parted /dev/md0 mkpart primary ext4 60% 80%          
+Information: You may need to update /etc/fstab.
+
+[root@otuslinux ~]# parted /dev/md0 mkpart primary ext4 80% 100%         
+Information: You may need to update /etc/fstab.
+
+[root@otuslinux ~]#</pre>
+
+<p>На этих созданных партициях создаём файловые системы:</p>
+
+<pre>[root@otuslinux ~]# for i in $(seq 1 5); do mkfs.ext4 /dev/md0p$i; done
+mke2fs 1.42.9 (28-Dec-2013)
+Filesystem label=
+OS type: Linux
+Block size=1024 (log=0)
+Fragment size=1024 (log=0)
+Stride=512 blocks, Stripe width=2048 blocks
+50200 inodes, 200704 blocks
+10035 blocks (5.00%) reserved for the super user
+First data block=1
+Maximum filesystem blocks=33816576
+25 block groups
+8192 blocks per group, 8192 fragments per group
+2008 inodes per group
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information: done 
+
+mke2fs 1.42.9 (28-Dec-2013)
+Filesystem label=
+OS type: Linux
+Block size=1024 (log=0)
+Fragment size=1024 (log=0)
+Stride=512 blocks, Stripe width=2048 blocks
+50800 inodes, 202752 blocks
+10137 blocks (5.00%) reserved for the super user
+First data block=1
+Maximum filesystem blocks=33816576
+25 block groups
+8192 blocks per group, 8192 fragments per group
+2032 inodes per group
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information: done 
+
+mke2fs 1.42.9 (28-Dec-2013)
+Filesystem label=
+OS type: Linux
+Block size=1024 (log=0)
+Fragment size=1024 (log=0)
+Stride=512 blocks, Stripe width=2048 blocks
+51200 inodes, 204800 blocks
+10240 blocks (5.00%) reserved for the super user
+First data block=1
+Maximum filesystem blocks=33816576
+25 block groups
+8192 blocks per group, 8192 fragments per group
+2048 inodes per group
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information: done 
+
+mke2fs 1.42.9 (28-Dec-2013)
+Filesystem label=
+OS type: Linux
+Block size=1024 (log=0)
+Fragment size=1024 (log=0)
+Stride=512 blocks, Stripe width=2048 blocks
+50800 inodes, 202752 blocks
+10137 blocks (5.00%) reserved for the super user
+First data block=1
+Maximum filesystem blocks=33816576
+25 block groups
+8192 blocks per group, 8192 fragments per group
+2032 inodes per group
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information: done 
+
+mke2fs 1.42.9 (28-Dec-2013)
+Filesystem label=
+OS type: Linux
+Block size=1024 (log=0)
+Fragment size=1024 (log=0)
+Stride=512 blocks, Stripe width=2048 blocks
+50200 inodes, 200704 blocks
+10035 blocks (5.00%) reserved for the super user
+First data block=1
+Maximum filesystem blocks=33816576
+25 block groups
+8192 blocks per group, 8192 fragments per group
+2008 inodes per group
+Superblock backups stored on blocks: 
+	8193, 24577, 40961, 57345, 73729
+
+Allocating group tables: done                            
+Writing inode tables: done                            
+Creating journal (4096 blocks): done
+Writing superblocks and filesystem accounting information: done 
+
+[root@otuslinux ~]#</pre>
+
+<p>и смонтируем их по каталогам:</p>
+
+<pre>[root@otuslinux ~]# mkdir -p /raid/part{1,2,3,4,5}
+[root@otuslinux ~]# for i in $(seq 1 5); do mount /dev/md0p$i /raid/part$i; done
+[root@otuslinux ~]#</pre>
+
+<p>Смотрим содержимое директории /raid:</p>
+
+<pre>[root@otuslinux ~]# ls -l /raid/
+total 5
+drwxr-xr-x. 3 root root 1024 Jun 19 18:06 part1
+drwxr-xr-x. 3 root root 1024 Jun 19 18:06 part2
+drwxr-xr-x. 3 root root 1024 Jun 19 18:06 part3
+drwxr-xr-x. 3 root root 1024 Jun 19 18:06 part4
+drwxr-xr-x. 3 root root 1024 Jun 19 18:06 part5
+[root@otuslinux ~]#</pre>
+
+<p>Смотрим список примонтированных только созданных партиций:</p>
+
+<pre>[root@otuslinux ~]# mount | grep part
+/dev/md0p1 on /raid/part1 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
+/dev/md0p2 on /raid/part2 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
+/dev/md0p3 on /raid/part3 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
+/dev/md0p4 on /raid/part4 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
+/dev/md0p5 on /raid/part5 type ext4 (rw,relatime,seclabel,stripe=2048,data=ordered)
+[root@otuslinux ~]#</pre>
